@@ -10,6 +10,9 @@ from keras.objectives import msle
 from scipy.stats import fisher_exact
 import random
 
+def get_surprise_from_data(i_feature,i_context,corrcounts,n_docs):
+	return calc_interpolated_log_conditional_pair(corrcounts[i_feature][i_feature],corrcounts[i_context][i_context],(corrcounts[i_feature][i_context] if i_context in corrcounts[i_feature].keys() else 0),n_docs)
+
 def calc_interpolated_log_conditional_pair(n_feature, n_context, n_feature_and_context, n_docs):
 	n_feature = float(n_feature)
 	n_context = float(n_context)
@@ -31,7 +34,7 @@ def gen_training_set(w2v_model, corrcounts, word_index, batch_size, n_docs, indi
 	batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),np.random.choice(len(valid_indices)-1,batch_size)),axis=1).tolist()
 	batch_indices = [(valid_indices[i],valid_indices[j]) if i<j else (valid_indices[i],valid_indices[j+1]) for i,j in batch_indices]
 	X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
-	y = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in batch_indices])
+	y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 	return X,y
 
 def yield_training_set(path,batch_size,indices_to_exclude = []):
@@ -41,7 +44,7 @@ def yield_training_set(path,batch_size,indices_to_exclude = []):
 		batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),np.random.choice(len(valid_indices)-1,batch_size)),axis=1).tolist()
 		batch_indices = [(valid_indices[i],valid_indices[j]) if i<j else (valid_indices[i],valid_indices[j+1]) for i,j in batch_indices]
 		X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
-		y = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in batch_indices])
+		y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 		yield X,y
 
 
@@ -56,18 +59,8 @@ def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True)
 			for batch_i2 in [idx[j:j+batch_size] for j in xrange(0,len(idx),batch_size)]:
 				batch_indices = zip(batch_i1,batch_i2)
 				X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
-				y = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in batch_indices])
+				y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 				yield X,y
-
-'''#This was from before we decided to move the interpolation into this file
-def gen_training_batch_old(w2v_model, surp_list, freq_list, word_index, batch_size, indices_to_exclude = []):
-	valid_indices = [i for i in range(len(word_index)) if i not in indices_to_exclude]
-	batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),np.random.choice(len(valid_indices)-1,batch_size)),axis=1).tolist()
-	batch_indices = [(valid_indices[i],valid_indices[j]) if i<j else (valid_indices[i],valid_indices[j+1]) for i,j in batch_indices]
-	X = np.stack([w2v_model[word_index[i]]+w2v_model[word_index[j]] for i,j in batch_indices])
-	y = np.stack([surp_list[i][j] if j in surp_list[i].keys() else freq_list[i] for i,j in batch_indices])
-	return X,y
-'''
 
 def load_w2v_and_surp(infile):
 	w2v_model = gensim.models.Word2Vec.load(infile+"w2v.model")

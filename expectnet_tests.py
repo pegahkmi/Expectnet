@@ -4,7 +4,7 @@ import unittest,keras,os,os.path,csv,string,math
 import numpy as np
 import numpy.testing
 from parse_acmdl import ACMDL_DocReader
-from train_expectnet import load_w2v_and_surp,script_compile_expectnet,calc_interpolated_log_conditional_pair,split_dataset,script_train_expectnet,gen_training_set,expectnet_input_vector
+from train_expectnet import load_w2v_and_surp,script_compile_expectnet,calc_interpolated_log_conditional_pair,split_dataset,script_train_expectnet,gen_training_set,expectnet_input_vector,get_surprise_from_data
 
 
 class Test_parse_acmdl(unittest.TestCase):
@@ -47,7 +47,7 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		return np.array([i/np.sum(p) for i in p])
 
 	@classmethod
-	def generate_letter_test_data(self,fn="letter_testdata.csv",n_docs=1000,doc_length=100,window=5,odds_max=3):
+	def generate_letter_test_data(self,fn="letter_testdata.csv",n_docs=10000,doc_length=100,window=5,odds_max=3):
 		with open(os.path.join(self.path,fn),"wb") as f:
 			writer = csv.writer(f)
 			writer.writerow(["Abstract",""])
@@ -136,7 +136,7 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		#Test some known log probs from the training data
 
 		epochs = 100
-		batch_size = 10000
+		batch_size = 1000
 		sample_size = 1000000
 		train_fraction = 0.7
 		val_fraction = 0.2
@@ -158,19 +158,19 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		expectnet.save(self.path+"expectnet.model")
 
 		#Check that errors on the training set are low
-		n_training_set_samples = 100
+		n_training_set_samples = 1000
 		train_sample_indices = np.stack((np.random.choice(len(self.train_indices),n_training_set_samples),np.random.choice(len(self.train_indices)-1,n_training_set_samples)),axis=1).tolist()
 		train_sample_indices = [(self.train_indices[i],self.train_indices[j]) if i<j else (self.train_indices[i],self.train_indices[j+1]) for i,j in train_sample_indices]
 		train_samples = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in train_sample_indices])
-		train_sample_probs = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in train_sample_indices])
+		train_sample_probs = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in train_sample_indices])
 		np.testing.assert_array_almost_equal(np.atleast_2d(train_sample_probs).T,expectnet.predict(train_samples,verbose=1))
 
 		#Check that errors on the test set are (not quite as) low
-		n_testing_set_samples = 100
+		n_testing_set_samples = 1000
 		test_sample_indices = np.stack((np.random.choice(len(self.test_indices),n_testing_set_samples),np.random.choice(len(self.test_indices)-1,n_testing_set_samples)),axis=1).tolist()
 		test_sample_indices = [(self.test_indices[i],self.test_indices[j]) if i<j else (self.test_indices[i],self.test_indices[j+1]) for i,j in test_sample_indices]
 		test_samples = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in test_sample_indices])
-		test_sample_probs = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in test_sample_indices])
+		test_sample_probs = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in test_sample_indices])
 		np.testing.assert_array_almost_equal(np.atleast_2d(test_sample_probs).T,expectnet.predict(test_samples,verbose=1))
 
 
