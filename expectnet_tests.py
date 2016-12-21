@@ -1,12 +1,12 @@
 __author__ = 'kazjon'
 
-import unittest,keras,os.path,csv,string,math
+import unittest,keras,os,os.path,csv,string,math
 import numpy as np
+import numpy.testing
 from parse_acmdl import ACMDL_DocReader
 from train_expectnet import load_w2v_and_surp,script_compile_expectnet,calc_interpolated_log_conditional_pair,split_dataset,script_train_expectnet,gen_training_set,expectnet_input_vector
 
 
-'''
 class Test_parse_acmdl(unittest.TestCase):
 
 	@classmethod
@@ -36,7 +36,6 @@ class Test_parse_acmdl(unittest.TestCase):
 		self.assertEqual(self.acm.corrs_dicts,corrcounts)
 
 
-'''
 class Test_w2v_and_Expectnet(unittest.TestCase):
 
 
@@ -76,6 +75,8 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 	@classmethod
 	def setUpClass(self):
 		self.path = "testing/"
+		if not os.path.exists(self.path):
+			os.makedirs(self.path)
 		self.testfn = "letter_testdata.csv"
 		self.testpath = os.path.join(self.path,self.testfn)
 		self.generate_letter_test_data(fn=self.testfn)
@@ -134,9 +135,9 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		#train expectnet
 		#Test some known log probs from the training data
 
-		epochs = 10
-		batch_size = 100
-		sample_size = 1000
+		epochs = 100
+		batch_size = 1000
+		sample_size = 100000
 		train_fraction = 0.7
 		val_fraction = 0.2
 		test_fraction = 0.1
@@ -150,18 +151,18 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		self.train_indices,self.val_indices,self.test_indices = split_dataset(word_index,path=self.path)
 
 		expectnet = script_compile_expectnet([256,256],100)
-		#expectnet = script_train_expectnet(expectnet,path=self.path,train_indices=self.train_indices,val_indices=self.val_indices,test_indices=self.test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction))
+		expectnet = script_train_expectnet(expectnet,path=self.path,train_indices=self.train_indices,val_indices=self.val_indices,test_indices=self.test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction))
 
 		#X_test,y_test = gen_training_set(w2v_model,corrcounts,word_index,int(sample_size * test_fraction),n_docs,indices_to_exclude=self.train_indices+self.val_indices)
 		#score = expectnet.evaluate(X_test, y_test, batch_size=batch_size)
-		#expectnet.save(self.path+"expectnet.model")
+		expectnet.save(self.path+"expectnet.model")
 
 		n_train_samples = 10
 		train_sample_indices = np.stack((np.random.choice(len(self.train_indices),n_train_samples),np.random.choice(len(self.train_indices)-1,n_train_samples)),axis=1).tolist()
 		train_sample_indices = [(self.train_indices[i],self.train_indices[j]) if i<j else (self.train_indices[i],self.train_indices[j+1]) for i,j in train_sample_indices]
 		train_samples = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in train_sample_indices])
 		train_sample_probs = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in train_sample_indices])
-		self.assertEqual(train_sample_probs,expectnet.predict(train_samples,verbose=1))
+		np.testing.assert_array_almost_equal(np.atleast_2d(train_sample_probs).T,expectnet.predict(train_samples,verbose=1))
 
 	#A trained expectnet should closely match the interpolated log probability for common and rare words in the test set.
 	def test_expectnet_test_error(self):

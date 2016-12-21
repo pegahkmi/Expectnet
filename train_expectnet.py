@@ -76,10 +76,10 @@ def load_w2v_and_surp(infile):
 	return w2v_model,corrcounts,word_index,n_docs,total_words
 
 def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None):
-	train_indices = random.sample(xrange(len(word_index)),int(train_fraction*len(word_index)))
+	train_indices = sorted(random.sample(xrange(len(word_index)),int(train_fraction*len(word_index))))
 	test_and_val_indices = [i for i in xrange(len(word_index)) if i not in train_indices]
-	val_indices = random.sample(test_and_val_indices,int(val_fraction*len(word_index)))
-	test_indices = [i for i in test_and_val_indices if i not in val_indices]
+	val_indices = sorted(random.sample(test_and_val_indices,int(val_fraction*len(word_index))))
+	test_indices = sorted([i for i in test_and_val_indices if i not in val_indices])
 	if path is not None:
 		with open(path+"expectnet.split","wb") as f:
 			pickle.dump((train_fraction,val_fraction,test_fraction,train_indices,val_indices,test_indices),f)
@@ -100,7 +100,7 @@ def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 	return expectnet
 
 #Either data (a train,test tuple of datasets) or path (where the generator can load the data) and train/test indices should be provided.
-def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=7):
+def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=4):
 	if data is not None:
 		X_train,y_train = data
 		expectnet.fit(X_train, y_train,nb_epoch=epochs,batch_size=batch_size)
@@ -108,7 +108,7 @@ def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_in
 	if path is not None and len(train_indices):
 		train_gen = yield_training_set(path,batch_size,indices_to_exclude=val_indices+test_indices)
 		val_gen = yield_training_set(path,batch_size,indices_to_exclude=train_indices+test_indices)
-		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=int(sample_size*epochs/batch_size),pickle_safe=False,nb_worker=1)
+		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=int(sample_size*epochs/batch_size),pickle_safe=True,nb_worker=n_cores)
 		return expectnet
 	print "Either data (a train,test dataset tuple) or path (to where the generator can load the data) should be provided. No training was performed."
 	return expectnet
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 	layer_sizes = [256,256]
 	epochs = 10
 	batch_size = 1000
-	sample_size = 1000000
+	sample_size = 100000
 	train_fraction = 0.7
 	val_fraction = 0.2
 	test_fraction = 0.1
