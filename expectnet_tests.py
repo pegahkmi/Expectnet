@@ -129,21 +129,21 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		self.assertEqual(expectnet.to_json(),keras.models.load_model(self.path+"expectnet.model").to_json())
 
 	#A trained expectnet should closely match the interpolated log probability for common and rare words in the training set.
-	def test_expectnet_training_error(self):
+	def test_expectnet_errors(self):
 		#Generate some test documents with letters as words and "Zeno's paradox" frequency, and random letter-letter coocurrence.
 		#train w2v
 		#train expectnet
 		#Test some known log probs from the training data
 
 		epochs = 100
-		batch_size = 1000
-		sample_size = 100000
+		batch_size = 10000
+		sample_size = 1000000
 		train_fraction = 0.7
 		val_fraction = 0.2
 		test_fraction = 0.1
 
 		acm = ACMDL_DocReader(self.testpath)
-		w2v_model = acm.train_w2v(self.path,min_count=5,iter=10)
+		w2v_model = acm.train_w2v(self.path,min_count=10,iter=100)
 		acm.finalise(w2v_model)
 		acm.save(self.path)
 		w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(self.path)
@@ -157,22 +157,22 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		#score = expectnet.evaluate(X_test, y_test, batch_size=batch_size)
 		expectnet.save(self.path+"expectnet.model")
 
-		n_train_samples = 10
-		train_sample_indices = np.stack((np.random.choice(len(self.train_indices),n_train_samples),np.random.choice(len(self.train_indices)-1,n_train_samples)),axis=1).tolist()
+		#Check that errors on the training set are low
+		n_training_set_samples = 100
+		train_sample_indices = np.stack((np.random.choice(len(self.train_indices),n_training_set_samples),np.random.choice(len(self.train_indices)-1,n_training_set_samples)),axis=1).tolist()
 		train_sample_indices = [(self.train_indices[i],self.train_indices[j]) if i<j else (self.train_indices[i],self.train_indices[j+1]) for i,j in train_sample_indices]
 		train_samples = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in train_sample_indices])
 		train_sample_probs = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in train_sample_indices])
 		np.testing.assert_array_almost_equal(np.atleast_2d(train_sample_probs).T,expectnet.predict(train_samples,verbose=1))
 
-	#A trained expectnet should closely match the interpolated log probability for common and rare words in the test set.
-	def test_expectnet_test_error(self):
-		#Generate some test documents with letters as words and "Zeno's paradox" frequency, and random letter-letter coocurrence.
-		#Split those test documents into training and testing data
-		#train w2v
-		#train expectnet
+		#Check that errors on the test set are (not quite as) low
+		n_testing_set_samples = 100
+		test_sample_indices = np.stack((np.random.choice(len(self.test_indices),n_testing_set_samples),np.random.choice(len(self.test_indices)-1,n_testing_set_samples)),axis=1).tolist()
+		test_sample_indices = [(self.test_indices[i],self.test_indices[j]) if i<j else (self.test_indices[i],self.test_indices[j+1]) for i,j in test_sample_indices]
+		test_samples = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in test_sample_indices])
+		test_sample_probs = np.stack([calc_interpolated_log_conditional_pair(corrcounts[i][i],corrcounts[j][j],(corrcounts[i][j] if j in corrcounts[i].keys() else 0),n_docs) for i,j in test_sample_indices])
+		np.testing.assert_array_almost_equal(np.atleast_2d(test_sample_probs).T,expectnet.predict(test_samples,verbose=1))
 
-		#Test some known log probs from the test data
-		self.assertEqual(True,False)
 
 	def test_surprise_eval(self):
 		#Generate some test documents with letters as words and "Zeno's paradox" frequency, and random letter-letter coocurrence.

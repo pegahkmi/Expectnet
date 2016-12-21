@@ -100,7 +100,7 @@ def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 	return expectnet
 
 #Either data (a train,test tuple of datasets) or path (where the generator can load the data) and train/test indices should be provided.
-def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=4):
+def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=11):
 	if data is not None:
 		X_train,y_train = data
 		expectnet.fit(X_train, y_train,nb_epoch=epochs,batch_size=batch_size)
