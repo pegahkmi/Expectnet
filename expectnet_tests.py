@@ -135,20 +135,20 @@ class Test_w2v_and_Expectnet(unittest.TestCase):
 		#train expectnet
 		#Test some known log probs from the training data
 
-		epochs = 100
+		epochs = 10
 		batch_size = 1000
-		sample_size = 1000000
+		sample_size = 100000
 		train_fraction = 0.7
 		val_fraction = 0.2
 		test_fraction = 0.1
 
 		acm = ACMDL_DocReader(self.testpath)
-		w2v_model = acm.train_w2v(self.path,min_count=10,iter=100)
+		w2v_model = acm.train_w2v(self.path,min_count=10,iter=20)
 		acm.finalise(w2v_model)
 		acm.save(self.path)
 		w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(self.path)
 
-		self.train_indices,self.val_indices,self.test_indices = split_dataset(word_index,path=self.path)
+		self.train_indices,self.val_indices,self.test_indices = split_dataset(word_index,path=self.path,train_fraction=train_fraction,val_fraction=val_fraction,test_fraction=test_fraction)
 
 		expectnet = script_compile_expectnet([256,256],100)
 		expectnet = script_train_expectnet(expectnet,path=self.path,train_indices=self.train_indices,val_indices=self.val_indices,test_indices=self.test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction))

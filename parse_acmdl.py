@@ -173,7 +173,7 @@ class ACMDL_DocReader(object):
 
 		self.finalised = True
 
-	def train_w2v(self,outputfile,size=50,min_count=25,iter=25,num_cores=8):
+	def train_w2v(self,outputfile,size=50,min_count=25,iter=25,num_cores=12):
 		self.model = gensim.models.Word2Vec(self,workers=num_cores,min_count=min_count,iter=iter,size=size)
 		self.model.save(outputfile+"w2v.model")
 		return self.model

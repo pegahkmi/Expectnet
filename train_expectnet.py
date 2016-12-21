@@ -1,6 +1,8 @@
 __author__ = 'kazjon'
 
-import logging, gensim, bz2, os
+import logging
+import gensim
+import os
 import cPickle as pickle
 import numpy as np
 from keras.models import Sequential
@@ -9,6 +11,10 @@ from keras.metrics import msle as msle_metric
 from keras.objectives import msle
 from scipy.stats import fisher_exact
 import random
+
+def get_surprise(i_feature,i_context,expectnet):
+	X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in np.vstack((np.atleast_1d(i_feature),np.atleast_1d(i_context)))])
+	return expectnet.predict(X)
 
 def get_surprise_from_data(i_feature,i_context,corrcounts,n_docs):
 	return calc_interpolated_log_conditional_pair(corrcounts[i_feature][i_feature],corrcounts[i_context][i_context],(corrcounts[i_feature][i_context] if i_context in corrcounts[i_feature].keys() else 0),n_docs)
