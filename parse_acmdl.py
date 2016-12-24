@@ -140,7 +140,7 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.corrs_done = True
 
-	def finalise(self, w2v, num_cores = 4):
+	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
 		self.total_words = self.correlations["___total_words___"]
 		self.total_docs = self.correlations["___total_docs___"]
@@ -156,10 +156,12 @@ class ACMDL_DocReader(object):
 		logger.info(" ** Gathered words to prune.")
 
 		#self.correlations = {k:{w:c for w,c in v.iteritems() if w not in words_to_del} for k,v in self.correlations.iteritems() if k not in words_to_del}
-		self.correlations = dict(Parallel(n_jobs=num_cores)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems() if key not in words_to_del))
+		self.correlations = {k:v for k,v in self.correlations.iteritems() if k not in words_to_del}
+		logger.info(" ** Completed pruning keys.")	
+		self.correlations = dict(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems()))
 		#for k,v in self.correlations.iteritems():
 		#	self.correlations[k] = {w:c for w,c in v.iteritems() if w not in words_to_del}
-		logger.info(" ** Completed pruning.")
+		logger.info(" ** Completed pruning values.")
 
 		self.word_index = self.correlations.keys()
 		word_indices = range(len(self.word_index))
@@ -191,7 +193,7 @@ def prune(key,corr_subdict,words_to_del):
 	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
 
 
-def reindex(corr_dict, word_index):
+def reindex(corr_dict, word_index): 
 	return {word_index.index(w):v for w,v in corr_dict.iteritems()}
 
 
