@@ -3,6 +3,7 @@ __author__ = 'kazjon'
 import logging
 import gensim
 import os
+import sys
 import cPickle as pickle
 import numpy as np
 from keras.models import Sequential
@@ -12,8 +13,13 @@ from keras.objectives import msle
 from scipy.stats import fisher_exact
 import random
 
-def get_surprise(i_feature,i_context,expectnet):
-	X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in np.vstack((np.atleast_1d(i_feature),np.atleast_1d(i_context)))])
+def get_surprise(expectnet,i_feature=None,i_context=None,input_pairs=None):
+	if input_pairs is not None:
+		X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in input_pairs])
+	elif i_feature is not None and i_context is not None:
+		X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in np.vstack((np.atleast_1d(i_feature),np.atleast_1d(i_context)))])
+	else:
+		sys.exit("Must provide get_surprise() with either a list of input pairs or individual lists of i_feature and i_context")
 	return expectnet.predict(X)
 
 def get_surprise_from_data(i_feature,i_context,corrcounts,n_docs):
@@ -99,7 +105,7 @@ def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 	return expectnet
 
 #Either data (a train,test tuple of datasets) or path (where the generator can load the data) and train/test indices should be provided.
-def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=11):
+def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=4):
 	if data is not None:
 		X_train,y_train = data
 		expectnet.fit(X_train, y_train,nb_epoch=epochs,batch_size=batch_size)

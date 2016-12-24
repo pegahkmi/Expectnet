@@ -1,6 +1,6 @@
 __author__ = 'kazjon'
 
-import csv,gensim,logging,sys
+import csv,gensim,logging,sys,os.path
 import cPickle as pickle
 import numpy as np
 from itertools import repeat,chain
@@ -140,8 +140,6 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.corrs_done = True
 
-
-
 	def finalise(self, w2v, num_cores = 4):
 		logger.info("Finalising vocab.")
 		self.total_words = self.correlations["___total_words___"]
@@ -154,9 +152,11 @@ class ACMDL_DocReader(object):
 			if w not in w2v.index2word and not w == "___total_words___":
 				self.total_words -= self.correlations[w][w]
 				words_to_del.append(w)
+		words_to_del = set(words_to_del)
 		logger.info(" ** Gathered words to prune.")
 
-		self.correlations = {k:{w:c for w,c in v.iteritems() if w not in words_to_del} for k,v in self.correlations.iteritems() if k not in words_to_del}
+		#self.correlations = {k:{w:c for w,c in v.iteritems() if w not in words_to_del} for k,v in self.correlations.iteritems() if k not in words_to_del}
+		self.correlations = dict(Parallel(n_jobs=num_cores)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems() if key not in words_to_del))
 		#for k,v in self.correlations.iteritems():
 		#	self.correlations[k] = {w:c for w,c in v.iteritems() if w not in words_to_del}
 		logger.info(" ** Completed pruning.")
@@ -173,7 +173,7 @@ class ACMDL_DocReader(object):
 
 		self.finalised = True
 
-	def train_w2v(self,outputfile,size=50,min_count=25,iter=25,num_cores=12):
+	def train_w2v(self,outputfile,size=64,min_count=25,iter=25,num_cores=12):
 		self.model = gensim.models.Word2Vec(self,workers=num_cores,min_count=min_count,iter=iter,size=size)
 		self.model.save(outputfile+"w2v.model")
 		return self.model
@@ -186,16 +186,21 @@ class ACMDL_DocReader(object):
 			print "Not finalised, refusing to save."
 			sys.exit()
 
+
+def prune(key,corr_subdict,words_to_del):
+	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
+
+
 def reindex(corr_dict, word_index):
 	return {word_index.index(w):v for w,v in corr_dict.iteritems()}
 
 
 if __name__ == "__main__":
-	inputfile = "ACMDL/PIQUE_Research papers_v1.0_pruned.csv"
-	outputfile = "ACMDL/"
-	acm = ACMDL_DocReader(inputfile)
-	model = acm.train_w2v(outputfile,min_count=25,iter=10)
+	inputfile = "ACMDL_complete.csv"
+	path = "acmdl/"
+	acm = ACMDL_DocReader(os.path.join(path,inputfile))
+	model = acm.train_w2v(path,min_count=25,iter=10)
 	acm.finalise(model)
-	acm.save(outputfile)
+	acm.save(path)
 	print model.most_similar("computer")
 	print model.most_similar("research")
