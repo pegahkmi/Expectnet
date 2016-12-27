@@ -116,7 +116,6 @@ class ACMDL_DocReader(object):
 		self.correlations = {"___total_words___": 0.0, "___total_docs___": 0.0}
 		self.corrs_done = False
 		self.finalised = False
-		self.processed = []
 
 	def __iter__(self):
 		with open(self.filepath,"rb") as i_f:
@@ -143,11 +142,10 @@ class ACMDL_DocReader(object):
 
 	def process(self):
 		logger.info(" ** Pre-processing started.")
-		for doc in self:
-			self.processed.append(doc)
-		with open(self.filepath+"data.preprocessed","wb") as pro_f:
+		with open(self.filepath[:-4]+".preprocessed","wb") as pro_f:
 			writer = csv.writer(pro_f)
-			writer.writerows(self.processed)
+			for doc in self:
+				writer.writerow(doc)
 		logger.info(" ** Pre-processing complete.")
 
 	def finalise(self, w2v, num_cores = 12):
