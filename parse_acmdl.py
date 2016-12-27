@@ -121,7 +121,13 @@ def prune(key,corr_subdict,words_to_del):
 	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
 
 def prune_to_array(corr_subdict,word_index):
-	return np.array([corr_subdict[w] for w in word_index])
+	corr_array = np.zeros(len(word_index))
+	for i,w in enumerate(word_index):
+		try:
+			corr_array[i] = corr_subdict[w]
+		except KeyError:
+			pass
+	return corr_array
 
 def reindex(corr_dict, word_index): 
 	return {word_index.index(w):v for w,v in corr_dict.iteritems()}
