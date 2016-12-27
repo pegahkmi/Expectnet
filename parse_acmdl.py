@@ -134,7 +134,7 @@ def reindex(corr_dict, word_index):
 
 
 if __name__ == "__main__":
-	inputfile = "ACMDL_complete"
+	inputfile = sys.argv[1]
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
