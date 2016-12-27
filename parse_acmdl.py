@@ -121,6 +121,7 @@ class ACMDL_DocReader(object):
 		with open(self.filepath,"rb") as i_f:
 			for row in csv.DictReader(i_f):
 				docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+				'''
 				if not self.corrs_done:
 					self.correlations["___total_words___"] += len(docwords)
 					unique_docwords = list(set(docwords))
@@ -137,6 +138,7 @@ class ACMDL_DocReader(object):
 									self.correlations[w1][w2] += 1
 								except KeyError:
 									self.correlations[w1][w2] = 1.0
+				'''
 				yield docwords
 		self.corrs_done = True
 
