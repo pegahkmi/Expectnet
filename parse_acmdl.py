@@ -110,7 +110,7 @@ class ACMDL_SentenceReader(object):
 
 class ACMDL_DocReader(object):
 	def __init__(self,path):
-		self.filepath = path
+		self.filepath = path+".csv"
 		self.stop = set(stopwords.words("english"))
 		self.tokeniser = RegexpTokenizer(r'\w+')
 		self.correlations = {"___total_words___": 0.0, "___total_docs___": 0.0}
@@ -140,13 +140,17 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.corrs_done = True
 
-	def process(self):
-		logger.info(" ** Pre-processing started.")
-		with open(self.filepath[:-4]+".preprocessed","wb") as pro_f:
-			writer = csv.writer(pro_f)
-			for doc in self:
-				writer.writerow(doc)
-		logger.info(" ** Pre-processing complete.")
+	def process(self,suffix=".preprocessed"):
+		preprocessed_path = self.filepath+suffix
+		if not os.path.exists(preprocessed_path):
+			logger.info(" ** Pre-processing started.")
+			with open(self.filepath+".preprocessed","wb") as pro_f:
+				writer = csv.writer(pro_f)
+				for doc in self:
+					writer.writerow(doc)
+			logger.info(" ** Pre-processing complete.")
+		else:
+			logger.info(" ** Pre-existing pre-processed file found.  Remove",preprocessed_path,"and re-run if you did not intend to reuse it.")
 
 	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
@@ -192,15 +196,15 @@ class ACMDL_DocReader(object):
 			print "Not finalised, refusing to save."
 			sys.exit()
 
-	def train_w2v(self,outputfile,size=64,min_count=25,iter=25,num_cores=12):
+	def train_w2v(self,outputpath,size=64,min_count=25,iter=25,num_cores=12):
 		self.model = gensim.models.Word2Vec(W2VReader(self.filepath),workers=num_cores,min_count=min_count,iter=iter,size=size)
-		self.model.save(outputfile+"w2v.model")
+		self.model.save(outputpath+"w2v.model")
 		return self.model
 
 
 class W2VReader(object):
-	def __init__(self,path,suffix="data.preprocessed"):
-		self.filepath = os.path.join(path,suffix)
+	def __init__(self,path,suffix=".preprocessed"):
+		self.filepath = path+suffix
 
 	def __iter__(self):
 		with open(self.filepath,"rb") as i_f:
@@ -218,7 +222,7 @@ def reindex(corr_dict, word_index):
 
 
 if __name__ == "__main__":
-	inputfile = "ACMDL_complete.csv"
+	inputfile = "ACMDL_complete"
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
