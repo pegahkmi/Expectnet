@@ -157,16 +157,17 @@ class ACMDL_DocReader(object):
 
 		#self.correlations = {k:{w:c for w,c in v.iteritems() if w not in words_to_del} for k,v in self.correlations.iteritems() if k not in words_to_del}
 		self.correlations = {k:v for k,v in self.correlations.iteritems() if k not in words_to_del}
-		logger.info(" ** Completed pruning keys.")	
-		self.correlations = dict(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems()))
+		self.word_index = self.correlations.keys()
+		self.correlations_list = [self.correlations[w] for w in self.word_index]
+		logger.info(" ** Completed pruning keys.")
+
+		#self.correlations = dict(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems()))
+		self.corrs_final = np.vstack(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune_to_array)(corr_subdict,self.word_index) for corr_subdict in self.correlations_list))
 		#for k,v in self.correlations.iteritems():
 		#	self.correlations[k] = {w:c for w,c in v.iteritems() if w not in words_to_del}
 		logger.info(" ** Completed pruning values.")
 
-		self.word_index = self.correlations.keys()
-		word_indices = range(len(self.word_index))
-
-		self.corrs_dicts = Parallel(n_jobs=num_cores)(delayed(reindex)(self.correlations[w],self.word_index) for w in self.word_index)
+		#self.corrs_dicts = Parallel(n_jobs=num_cores)(delayed(reindex)(self.correlations[w],self.word_index) for w in self.word_index)
 		#counts = [float(self.correlations[w][w]) for w in self.word_index]
 		logger.info(" ** Completed corrdict calculation.")
 
@@ -183,7 +184,7 @@ class ACMDL_DocReader(object):
 	def save(self, out_fn):
 		if self.finalised:
 			with open(out_fn+"data.corrcounts","wb") as corr_f:
-				pickle.dump((self.corrs_dicts,self.word_index,self.total_docs,self.total_words),corr_f)
+				pickle.dump((self.corrs_final,self.word_index,self.total_docs,self.total_words),corr_f)
 		else:
 			print "Not finalised, refusing to save."
 			sys.exit()
@@ -192,6 +193,8 @@ class ACMDL_DocReader(object):
 def prune(key,corr_subdict,words_to_del):
 	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
 
+def prune_to_array(corr_subdict,word_index):
+	return np.array([corr_subdict[w] for w in word_index])
 
 def reindex(corr_dict, word_index): 
 	return {word_index.index(w):v for w,v in corr_dict.iteritems()}

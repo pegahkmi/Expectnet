@@ -23,7 +23,10 @@ def get_surprise(expectnet,i_feature=None,i_context=None,input_pairs=None):
 	return expectnet.predict(X)
 
 def get_surprise_from_data(i_feature,i_context,corrcounts,n_docs):
-	return calc_interpolated_log_conditional_pair(corrcounts[i_feature][i_feature],corrcounts[i_context][i_context],(corrcounts[i_feature][i_context] if i_context in corrcounts[i_feature].keys() else 0),n_docs)
+	if type(corrcounts) is dict:
+		return calc_interpolated_log_conditional_pair(corrcounts[i_feature][i_feature],corrcounts[i_context][i_context],(corrcounts[i_feature][i_context] if i_context in corrcounts[i_feature].keys() else 0),n_docs)
+	else:
+		return calc_interpolated_log_conditional_pair(corrcounts[i_feature,i_feature],corrcounts[i_context,i_context],corrcounts[i_feature,i_context],n_docs)
 
 def calc_interpolated_log_conditional_pair(n_feature, n_context, n_feature_and_context, n_docs):
 	n_feature = float(n_feature)
