@@ -111,7 +111,7 @@ class ACMDL_SentenceReader(object):
 class ACMDL_DocReader(object):
 	def __init__(self,path):
 		self.filepath = path
-		self.stop = stopwords.words("english")
+		self.stop = set(stopwords.words("english"))
 		self.tokeniser = RegexpTokenizer(r'\w+')
 		self.correlations = {"___total_words___": 0.0, "___total_docs___": 0.0}
 		self.corrs_done = False
@@ -121,8 +121,8 @@ class ACMDL_DocReader(object):
 		with open(self.filepath,"rb") as i_f:
 			for row in csv.DictReader(i_f):
 				docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
-				self.correlations["___total_words___"] += len(docwords)
 				if not self.corrs_done:
+					self.correlations["___total_words___"] += len(docwords)
 					unique_docwords = list(set(docwords))
 					self.correlations["___total_docs___"] += 1
 					for w1 in unique_docwords:
