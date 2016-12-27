@@ -142,8 +142,13 @@ class ACMDL_DocReader(object):
 		self.corrs_done = True
 
 	def process(self):
+		logger.info(" ** Pre-processing started.")
 		for doc in self:
 			self.processed.append(doc)
+		with open(self.filepath+"data.preprocessed","wb") as pro_f:
+			writer = csv.writer(pro_f)
+			writer.writerows(self.processed)
+		logger.info(" ** Pre-processing complete.")
 
 	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
@@ -185,9 +190,6 @@ class ACMDL_DocReader(object):
 		if self.finalised:
 			with open(out_fn+"data.corrcounts","wb") as corr_f:
 				pickle.dump((self.corrs_final,self.word_index,self.total_docs,self.total_words),corr_f)
-			with open(out_fn+"data.preprocessed","wb") as pro_f:
-				writer = csv.writer(pro_f)
-				writer.writerows(self.processed)
 		else:
 			print "Not finalised, refusing to save."
 			sys.exit()
