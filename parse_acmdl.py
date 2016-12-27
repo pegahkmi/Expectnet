@@ -116,12 +116,12 @@ class ACMDL_DocReader(object):
 		self.correlations = {"___total_words___": 0.0, "___total_docs___": 0.0}
 		self.corrs_done = False
 		self.finalised = False
+		self.processed = []
 
 	def __iter__(self):
 		with open(self.filepath,"rb") as i_f:
 			for row in csv.DictReader(i_f):
 				docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
-				'''
 				if not self.corrs_done:
 					self.correlations["___total_words___"] += len(docwords)
 					unique_docwords = list(set(docwords))
@@ -138,9 +138,12 @@ class ACMDL_DocReader(object):
 									self.correlations[w1][w2] += 1
 								except KeyError:
 									self.correlations[w1][w2] = 1.0
-				'''
 				yield docwords
 		self.corrs_done = True
+
+	def process(self):
+		for doc in self:
+			self.processed.append(doc)
 
 	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
@@ -178,19 +181,31 @@ class ACMDL_DocReader(object):
 
 		self.finalised = True
 
-	def train_w2v(self,outputfile,size=64,min_count=25,iter=25,num_cores=12):
-		self.model = gensim.models.Word2Vec(self,workers=num_cores,min_count=min_count,iter=iter,size=size)
-		self.model.save(outputfile+"w2v.model")
-		return self.model
-
 	def save(self, out_fn):
 		if self.finalised:
 			with open(out_fn+"data.corrcounts","wb") as corr_f:
 				pickle.dump((self.corrs_final,self.word_index,self.total_docs,self.total_words),corr_f)
+			with open(out_fn+"data.preprocessed","wb") as pro_f:
+				writer = csv.writer(pro_f)
+				writer.writerows(self.processed)
 		else:
 			print "Not finalised, refusing to save."
 			sys.exit()
 
+	def train_w2v(self,outputfile,size=64,min_count=25,iter=25,num_cores=12):
+		self.model = gensim.models.Word2Vec(W2VReader(self.filepath),workers=num_cores,min_count=min_count,iter=iter,size=size)
+		self.model.save(outputfile+"w2v.model")
+		return self.model
+
+
+class W2VReader(object):
+	def __init__(self,path,suffix="data.preprocessed"):
+		self.filepath = os.path.join(path,suffix)
+
+	def __iter__(self):
+		with open(self.filepath,"rb") as i_f:
+			for row in csv.reader(i_f):
+				yield row
 
 def prune(key,corr_subdict,words_to_del):
 	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
@@ -206,7 +221,8 @@ if __name__ == "__main__":
 	inputfile = "ACMDL_complete.csv"
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
-	model = acm.train_w2v(path,min_count=25,iter=10)
+	acm.process()
+	model = acm.train_w2v(path)
 	acm.finalise(model)
 	acm.save(path)
 	print model.most_similar("computer")
