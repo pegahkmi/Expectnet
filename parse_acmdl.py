@@ -48,7 +48,6 @@ class ACMDL_DocReader(object):
 
 	def process(self,suffix=".preprocessed"):
 		preprocessed_path = self.filepath+suffix
-		print preprocessed_path
 		if not os.path.exists(preprocessed_path):
 			logger.info(" ** Pre-processing started.")
 			with open(preprocessed_path,"wb") as pro_f:
@@ -57,7 +56,7 @@ class ACMDL_DocReader(object):
 					writer.writerow(doc)
 			logger.info(" ** Pre-processing complete.")
 		else:
-			logger.info(" ** Pre-existing pre-processed file found.  Remove",preprocessed_path,"and re-run if you did not intend to reuse it.")
+			logger.info(" ** Pre-existing pre-processed file found.  Remove "+preprocessed_path+" and re-run if you did not intend to reuse it.")
 
 	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
