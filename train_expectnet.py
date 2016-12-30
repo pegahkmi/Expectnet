@@ -111,10 +111,12 @@ def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 #Either data (a train,test tuple of datasets) or path (where the generator can load the data) and train/test indices should be provided.
 def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=4):
 	if data is not None:
+		logger.info(" ** Training expectnet using pre-generated data.")
 		X_train,y_train = data
 		expectnet.fit(X_train, y_train,nb_epoch=epochs,batch_size=batch_size)
 		return expectnet
 	if path is not None and len(train_indices):
+		logger.info(" ** Training expectnet using generators.")
 		train_gen = yield_training_set(path,batch_size,indices_to_exclude=val_indices+test_indices)
 		val_gen = yield_training_set(path,batch_size,indices_to_exclude=train_indices+test_indices)
 		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=n_cores*batch_size,pickle_safe=True,nb_worker=n_cores)
@@ -127,12 +129,13 @@ def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_in
 
 if __name__ == "__main__":
 	logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+	logger = logging.getLogger("expectnet")
 
 	path = sys.argv[1]
 	layer_sizes = [256,256]
 	epochs = 100
 	batch_size = 10000
-	sample_size = sys.argv[2]
+	sample_size = int(sys.argv[2])
 	train_fraction = 0.7
 	val_fraction = 0.2
 	test_fraction = 0.1
@@ -140,8 +143,10 @@ if __name__ == "__main__":
 
 	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(path)
 	expectnet = script_compile_expectnet(layer_sizes,2*w2v_model.vector_size)
+	logger.info(" ** Expectnet compiled.")
 
 	train_indices,val_indices,test_indices = split_dataset(word_index,path=path)
+	logger.info(" ** Dataset split into train, test and validation.")
 
 	if generate:
 		expectnet = script_train_expectnet(expectnet,path=path,train_indices=train_indices,val_indices=val_indices,test_indices=test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction), n_cores=multiprocessing.cpu_count())
