@@ -1,6 +1,6 @@
 __author__ = 'kazjon'
 
-import csv,gensim,logging,sys,os.path
+import csv,gensim,logging,sys,os.path,multiprocessing
 import cPickle as pickle
 import numpy as np
 from itertools import repeat,chain
@@ -143,8 +143,8 @@ if __name__ == "__main__":
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
-	model = acm.train_w2v(path,min_count=100,iter=100)
-	acm.finalise(model, num_cores=6)
+	model = acm.train_w2v(path,min_count=100,iter=100, num_cores=multiprocessing.cpu_count())
+	acm.finalise(model, num_cores=multiprocessing.cpu_count())
 	acm.save(path)
 	print model.most_similar("computer")
 	print model.most_similar("research")

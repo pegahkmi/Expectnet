@@ -4,6 +4,7 @@ import logging
 import gensim
 import os
 import sys
+import multiprocessing
 import cPickle as pickle
 import numpy as np
 from keras.models import Sequential
@@ -127,7 +128,7 @@ def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_in
 if __name__ == "__main__":
 	logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-	path = "ACMDL/"
+	path = sys.argv[1]
 	layer_sizes = [256,256]
 	epochs = 100
 	batch_size = 1000
@@ -143,7 +144,7 @@ if __name__ == "__main__":
 	train_indices,val_indices,test_indices = split_dataset(word_index,path=path)
 
 	if generate:
-		expectnet = script_train_expectnet(expectnet,path=path,train_indices=train_indices,val_indices=val_indices,test_indices=test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction))
+		expectnet = script_train_expectnet(expectnet,path=path,train_indices=train_indices,val_indices=val_indices,test_indices=test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction), n_cores=multiprocessing.cpu_count())
 	else:
 		X_train,y_train = gen_training_set(w2v_model,corrcounts,word_index,sample_size,n_docs,indices_to_exclude=val_indices+test_indices)
 		expectnet = script_train_expectnet(expectnet,data=(X_train,y_train),epochs=epochs,batch_size=batch_size)
