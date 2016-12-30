@@ -71,7 +71,6 @@ class ACMDL_DocReader(object):
 		del self.correlations["___total_docs___"]
 
 		words_to_del = []
-		print self.correlations
 		for w in self.correlations.keys():
 			if w not in w2v.index2word and not w == "___total_words___":
 				self.total_words -= self.correlations[w][w]
@@ -145,7 +144,7 @@ if __name__ == "__main__":
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
 	model = acm.train_w2v(path,min_count=100,iter=100)
-	acm.finalise(model)
+	acm.finalise(model, num_cores=6)
 	acm.save(path)
 	print model.most_similar("computer")
 	print model.most_similar("research")
