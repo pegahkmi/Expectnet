@@ -54,9 +54,14 @@ class ACMDL_DocReader(object):
 				writer = csv.writer(pro_f)
 				for doc in self:
 					writer.writerow(doc)
+			with open(preprocessed_path+"_corrs","wb") as corr_f:
+				pickle.dump(self.correlations,corr_f)
 			logger.info(" ** Pre-processing complete.")
 		else:
 			logger.info(" ** Pre-existing pre-processed file found.  Remove "+preprocessed_path+" and re-run if you did not intend to reuse it.")
+			with open(preprocessed_path+"_corrs","rb") as corr_f:
+				self.correlations = pickle.load(corr_f)
+
 
 	def finalise(self, w2v, num_cores = 12):
 		logger.info("Finalising vocab.")
@@ -66,6 +71,7 @@ class ACMDL_DocReader(object):
 		del self.correlations["___total_docs___"]
 
 		words_to_del = []
+		print self.correlations
 		for w in self.correlations.keys():
 			if w not in w2v.index2word and not w == "___total_words___":
 				self.total_words -= self.correlations[w][w]
@@ -138,7 +144,7 @@ if __name__ == "__main__":
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
-	model = acm.train_w2v(path)
+	model = acm.train_w2v(path,min_count=100,iter=100)
 	acm.finalise(model)
 	acm.save(path)
 	print model.most_similar("computer")

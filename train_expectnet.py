@@ -129,9 +129,9 @@ if __name__ == "__main__":
 
 	path = "ACMDL/"
 	layer_sizes = [256,256]
-	epochs = 10
+	epochs = 100
 	batch_size = 1000
-	sample_size = 100000
+	sample_size = 1000000
 	train_fraction = 0.7
 	val_fraction = 0.2
 	test_fraction = 0.1
