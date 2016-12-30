@@ -117,7 +117,7 @@ def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_in
 	if path is not None and len(train_indices):
 		train_gen = yield_training_set(path,batch_size,indices_to_exclude=val_indices+test_indices)
 		val_gen = yield_training_set(path,batch_size,indices_to_exclude=train_indices+test_indices)
-		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=int(sample_size*epochs/batch_size),pickle_safe=True,nb_worker=n_cores)
+		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=n_cores*batch_size,pickle_safe=True,nb_worker=n_cores)
 		return expectnet
 	print "Either data (a train,test dataset tuple) or path (to where the generator can load the data) should be provided. No training was performed."
 	return expectnet
@@ -131,8 +131,8 @@ if __name__ == "__main__":
 	path = sys.argv[1]
 	layer_sizes = [256,256]
 	epochs = 100
-	batch_size = 1000
-	sample_size = 1000000
+	batch_size = 10000
+	sample_size = sys.argv[2]
 	train_fraction = 0.7
 	val_fraction = 0.2
 	test_fraction = 0.1
