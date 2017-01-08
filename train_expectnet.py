@@ -5,11 +5,11 @@ import gensim
 import os
 import sys
 import multiprocessing
+import threading
 import cPickle as pickle
 import numpy as np
 from keras.models import Sequential
 from keras.layers import Dense, Activation
-from keras.metrics import msle as msle_metric
 from keras.objectives import msle
 from scipy.stats import fisher_exact
 import random
@@ -53,11 +53,37 @@ def gen_training_set(w2v_model, corrcounts, word_index, batch_size, n_docs, indi
 	y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 	return X,y
 
+class threadsafe_iter:
+	"""Takes an iterator/generator and makes it thread-safe by
+	serializing call to the `next` method of given iterator/generator.
+	"""
+	def __init__(self, it):
+		self.it = it
+		self.lock = threading.Lock()
+
+	def __iter__(self):
+		return self
+
+	def next(self):
+		with self.lock:
+			return self.it.next()
+
+
+def threadsafe_generator(f):
+	"""A decorator that takes a generator function and makes it thread-safe.
+	"""
+	def g(*a, **kw):
+		return threadsafe_iter(f(*a, **kw))
+	return g
+
+@threadsafe_generator
 def yield_training_set(path,batch_size,indices_to_exclude = []):
 	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(path)
 	valid_indices = [i for i in range(len(word_index)) if i not in indices_to_exclude]
 	while 1:
-		batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),np.random.choice(len(valid_indices)-1,batch_size)),axis=1).tolist()
+		batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),
+								 	np.random.choice(len(valid_indices)-1,batch_size)),
+								 	axis=1).tolist()
 		batch_indices = [(valid_indices[i],valid_indices[j]) if i<j else (valid_indices[i],valid_indices[j+1]) for i,j in batch_indices]
 		X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
 		y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
@@ -78,19 +104,19 @@ def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True)
 				y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 				yield X,y
 
-def load_w2v_and_surp(infile):
-	w2v_model = gensim.models.Word2Vec.load(infile+"w2v.model")
-	with open(infile+"data.corrcounts") as f:
+def load_w2v_and_surp(path,w2vsuffix=".w2vmodel",corrsuffix=".corrcounts"):
+	w2v_model = gensim.models.Word2Vec.load(path+w2vsuffix)
+	with open(path+corrsuffix) as f:
 		corrcounts,word_index,n_docs,total_words = pickle.load(f)
 	return w2v_model,corrcounts,word_index,n_docs,total_words
 
-def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None):
+def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None,suffix=".datasplit"):
 	train_indices = sorted(random.sample(xrange(len(word_index)),int(train_fraction*len(word_index))))
 	test_and_val_indices = [i for i in xrange(len(word_index)) if i not in train_indices]
 	val_indices = sorted(random.sample(test_and_val_indices,int(val_fraction*len(word_index))))
 	test_indices = sorted([i for i in test_and_val_indices if i not in val_indices])
 	if path is not None:
-		with open(path+"expectnet.split","wb") as f:
+		with open(path+suffix,"wb") as f:
 			pickle.dump((train_fraction,val_fraction,test_fraction,train_indices,val_indices,test_indices),f)
 	return train_indices,val_indices,test_indices
 
@@ -108,8 +134,18 @@ def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 	expectnet.compile(loss=msle,optimizer="sgd")#,metrics=[msle_metric])
 	return expectnet
 
-#Either data (a train,test tuple of datasets) or path (where the generator can load the data) and train/test indices should be provided.
-def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_indices=[],test_indices=[],epochs=20,batch_size=10000,sample_size=100000,nb_val_samples=20000,n_cores=4):
+#Either data (a train,test tuple of datasets) or path to the data and train/test indices should be provided.
+def script_train_expectnet(expectnet,
+						   data=None,
+						   path=None,
+						   train_indices=[],
+						   val_indices=[],
+						   test_indices=[],
+						   epochs=20,
+						   batch_size=10000,
+						   sample_size=100000,
+						   nb_val_samples=20000,
+						   n_cores=4):
 	if data is not None:
 		logger.info(" ** Training expectnet using pre-generated data.")
 		X_train,y_train = data
@@ -119,9 +155,16 @@ def script_train_expectnet(expectnet,data=None,path=None,train_indices=[],val_in
 		logger.info(" ** Training expectnet using generators.")
 		train_gen = yield_training_set(path,batch_size,indices_to_exclude=val_indices+test_indices)
 		val_gen = yield_training_set(path,batch_size,indices_to_exclude=train_indices+test_indices)
-		expectnet.fit_generator(train_gen,sample_size,epochs,validation_data=val_gen,nb_val_samples=nb_val_samples,max_q_size=n_cores*batch_size,pickle_safe=True,nb_worker=n_cores)
+		expectnet.fit_generator(train_gen,sample_size,epochs,
+								validation_data=val_gen,
+								nb_val_samples=nb_val_samples,
+								max_q_size=batch_size,
+								pickle_safe=n_cores > 1,
+								nb_worker=n_cores
+		)
 		return expectnet
-	print "Either data (a train,test dataset tuple) or path (to where the generator can load the data) should be provided. No training was performed."
+	print "Either data (a train,test dataset tuple) or path (to where the generator can load the data) " \
+		  "should be provided. No training was performed."
 	return expectnet
 
 
@@ -131,31 +174,50 @@ if __name__ == "__main__":
 	logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 	logger = logging.getLogger("expectnet")
 
-	path = sys.argv[1]
+	inputfile = sys.argv[1]
+	path = "acmdl/"
 	layer_sizes = [256,256]
-	epochs = 100
-	batch_size = 10000
+	epochs = 50
 	sample_size = int(sys.argv[2])
 	train_fraction = 0.7
 	val_fraction = 0.2
 	test_fraction = 0.1
 	generate = True
+	parallelise = True
+	batch_size = sample_size / 10 / multiprocessing.cpu_count() if parallelise else sample_size / 10
 
-	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(path)
+
+	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(os.path.join(path,inputfile))
+	logger.info(" ** w2v loaded. Corrcounts type:"+str(type(corrcounts)))
 	expectnet = script_compile_expectnet(layer_sizes,2*w2v_model.vector_size)
 	logger.info(" ** Expectnet compiled.")
 
-	train_indices,val_indices,test_indices = split_dataset(word_index,path=path)
+	train_indices,val_indices,test_indices = split_dataset(word_index,path=os.path.join(path,inputfile))
 	logger.info(" ** Dataset split into train, test and validation.")
 
 	if generate:
-		expectnet = script_train_expectnet(expectnet,path=path,train_indices=train_indices,val_indices=val_indices,test_indices=test_indices,epochs=epochs,batch_size=batch_size,sample_size=int(sample_size * train_fraction),nb_val_samples=int(sample_size * val_fraction), n_cores=multiprocessing.cpu_count())
+		expectnet = script_train_expectnet(expectnet,
+										   path=os.path.join(path,inputfile),
+										   train_indices=train_indices,
+										   val_indices=val_indices,
+										   test_indices=test_indices,
+										   epochs=epochs,
+										   batch_size=batch_size,
+										   sample_size=int(sample_size * train_fraction),
+										   nb_val_samples=int(sample_size * val_fraction),
+										   n_cores=multiprocessing.cpu_count()-1 if parallelise else 1
+		)
 	else:
-		X_train,y_train = gen_training_set(w2v_model,corrcounts,word_index,sample_size,n_docs,indices_to_exclude=val_indices+test_indices)
+		X_train,y_train = gen_training_set(w2v_model,corrcounts,word_index,sample_size,n_docs,
+										   indices_to_exclude=val_indices+test_indices
+		)
 		expectnet = script_train_expectnet(expectnet,data=(X_train,y_train),epochs=epochs,batch_size=batch_size)
+
 	print
-	X_test,y_test = gen_training_set(w2v_model,corrcounts,word_index,int(sample_size * test_fraction),n_docs,indices_to_exclude=train_indices+val_indices)
+	X_test,y_test = gen_training_set(w2v_model,corrcounts,word_index,int(sample_size * test_fraction),n_docs,
+									 indices_to_exclude=train_indices+val_indices
+	)
 	score = expectnet.evaluate(X_test, y_test, batch_size=batch_size)
-	expectnet.save(path+"expectnet.model")
+	expectnet.save(os.path.join(path,inputfile)+".expectnet")
 	print
 	print score

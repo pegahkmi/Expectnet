@@ -3,16 +3,32 @@ __author__ = 'kazjon'
 import csv,gensim,logging,sys,os.path,multiprocessing
 import cPickle as pickle
 import numpy as np
+import nltk,io
 from itertools import repeat,chain
 from pathos.multiprocessing import Pool
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords,wordnet
+from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from joblib import Parallel, delayed
-from scipy.sparse import coo_matrix
+from scipy.sparse import dok_matrix,hstack
 from scipy.stats import fisher_exact
+from inflection import singularize
+
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger("expectnet")
+
+def get_wordnet_pos(treebank_tag):
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN
 
 class ACMDL_DocReader(object):
 	def __init__(self,path):
@@ -24,9 +40,18 @@ class ACMDL_DocReader(object):
 		self.finalised = False
 
 	def __iter__(self):
-		with open(self.filepath+".csv","rb") as i_f:
+		lem = WordNetLemmatizer()
+		with io.open(self.filepath+".csv",mode="r",encoding='ascii',errors="ignore") as i_f:
 			for row in csv.DictReader(i_f):
-				docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+				#Default
+				#docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+
+				#Singularise
+				docwords = [singularize(w) for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+
+				#tag+lemmatize
+				#docwords = nltk.pos_tag(self.tokeniser.tokenize(row["Abstract"].lower()))
+				#docwords = [lem.lemmatize(w,pos=get_wordnet_pos(t)) for w,t in docwords if w not in self.stop]
 				if not self.corrs_done:
 					self.correlations["___total_words___"] += len(docwords)
 					unique_docwords = list(set(docwords))
@@ -46,9 +71,11 @@ class ACMDL_DocReader(object):
 				yield docwords
 		self.corrs_done = True
 
+
+
 	def process(self,suffix=".preprocessed"):
 		preprocessed_path = self.filepath+suffix
-		if not os.path.exists(preprocessed_path):
+		if not os.path.exists(preprocessed_path) or not os.path.exists(preprocessed_path+"_corrs"):
 			logger.info(" ** Pre-processing started.")
 			with open(preprocessed_path,"wb") as pro_f:
 				writer = csv.writer(pro_f)
@@ -58,7 +85,8 @@ class ACMDL_DocReader(object):
 				pickle.dump(self.correlations,corr_f)
 			logger.info(" ** Pre-processing complete.")
 		else:
-			logger.info(" ** Pre-existing pre-processed file found.  Remove "+preprocessed_path+" and re-run if you did not intend to reuse it.")
+			logger.info(" ** Pre-existing pre-processed file found.  Remove "+preprocessed_path+
+						" and re-run if you did not intend to reuse it.")
 			with open(preprocessed_path+"_corrs","rb") as corr_f:
 				self.correlations = pickle.load(corr_f)
 
@@ -78,17 +106,18 @@ class ACMDL_DocReader(object):
 		words_to_del = set(words_to_del)
 		logger.info(" ** Gathered words to prune.")
 
-		#self.correlations = {k:{w:c for w,c in v.iteritems() if w not in words_to_del} for k,v in self.correlations.iteritems() if k not in words_to_del}
 		self.correlations = {k:v for k,v in self.correlations.iteritems() if k not in words_to_del}
 		self.word_index = self.correlations.keys()
 		self.correlations_list = [self.correlations[w] for w in self.word_index]
 		logger.info(" ** Completed pruning keys.")
 
-		#self.correlations = dict(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune)(key,corr_subdict,words_to_del) for key,corr_subdict in self.correlations.iteritems()))
-		self.corrs_final = np.vstack(Parallel(n_jobs=num_cores, max_nbytes=1e9)(delayed(prune_to_array)(corr_subdict,self.word_index) for corr_subdict in self.correlations_list))
-		#for k,v in self.correlations.iteritems():
-		#	self.correlations[k] = {w:c for w,c in v.iteritems() if w not in words_to_del}
-		logger.info(" ** Completed pruning values.")
+		del self.correlations
+		self.corrs_final = hstack(Parallel(n_jobs=num_cores, max_nbytes=1e9)(
+									 delayed(prune_to_array)
+									 	(corr_subdict,self.word_index) for corr_subdict in self.correlations_list)
+								 ).tocsr()
+		del self.correlations_list
+		logger.info(" ** Completed pruning values. Final corrs shape:"+str(self.corrs_final.shape))
 
 		#self.corrs_dicts = Parallel(n_jobs=num_cores)(delayed(reindex)(self.correlations[w],self.word_index) for w in self.word_index)
 		#counts = [float(self.correlations[w][w]) for w in self.word_index]
@@ -99,17 +128,18 @@ class ACMDL_DocReader(object):
 
 		self.finalised = True
 
-	def save(self, out_fn):
+	def save(self, suffix=".corrcounts"):
 		if self.finalised:
-			with open(out_fn+"data.corrcounts","wb") as corr_f:
+			with open(self.filepath+suffix,"wb") as corr_f:
 				pickle.dump((self.corrs_final,self.word_index,self.total_docs,self.total_words),corr_f)
 		else:
 			print "Not finalised, refusing to save."
 			sys.exit()
 
-	def train_w2v(self,outputpath,size=64,min_count=25,iter=25,num_cores=12):
-		self.model = gensim.models.Word2Vec(W2VReader(self.filepath),workers=num_cores,min_count=min_count,iter=iter,size=size)
-		self.model.save(outputpath+"w2v.model")
+	def train_w2v(self,suffix=".w2vmodel",size=64,min_count=25,iter=25,num_cores=12):
+		fast_reader = W2VReader(self.filepath)
+		self.model = gensim.models.Word2Vec(fast_reader,workers=num_cores,min_count=min_count,iter=iter,size=size)
+		self.model.save(self.filepath+suffix)
 		return self.model
 
 
@@ -126,13 +156,13 @@ def prune(key,corr_subdict,words_to_del):
 	return (key,{w:c for w,c in corr_subdict.iteritems() if w not in words_to_del})
 
 def prune_to_array(corr_subdict,word_index):
-	corr_array = np.zeros(len(word_index))
+	corr_array = dok_matrix((len(word_index),1), dtype=np.float32)
 	for i,w in enumerate(word_index):
 		try:
 			corr_array[i] = corr_subdict[w]
 		except KeyError:
 			pass
-	return corr_array
+	return corr_array.tocsr()
 
 def reindex(corr_dict, word_index): 
 	return {word_index.index(w):v for w,v in corr_dict.iteritems()}
@@ -143,8 +173,8 @@ if __name__ == "__main__":
 	path = "acmdl/"
 	acm = ACMDL_DocReader(os.path.join(path,inputfile))
 	acm.process()
-	model = acm.train_w2v(path,min_count=100,iter=100, num_cores=multiprocessing.cpu_count())
+	model = acm.train_w2v(min_count=10,iter=50, num_cores=multiprocessing.cpu_count())
 	acm.finalise(model, num_cores=multiprocessing.cpu_count())
-	acm.save(path)
+	acm.save()
 	print model.most_similar("computer")
 	print model.most_similar("research")
