@@ -100,7 +100,7 @@ class ACMDL_DocReader(object):
 
 		words_to_del = []
 		for w in self.correlations.keys():
-			if w not in w2v.index2word and not w == "___total_words___":
+			if w not in w2v.wv.index2word and not w == "___total_words___":
 				self.total_words -= self.correlations[w][w]
 				words_to_del.append(w)
 		words_to_del = set(words_to_del)
