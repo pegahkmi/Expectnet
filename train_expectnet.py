@@ -6,13 +6,19 @@ import os
 import sys
 import multiprocessing
 import threading
+import random
 import cPickle as pickle
 import numpy as np
-from keras.models import Sequential
+from keras.models import Sequential,load_model
 from keras.layers import Dense, Activation
 from keras.objectives import msle
 from scipy.stats import fisher_exact
-import random
+
+EXPECTNET_SUFFIX = ".expectnet"
+W2V_SUFFIX = ".w2vmodel"
+CORRS_SUFFIX = ".corrcounts"
+DATASPLIT_SUFFIX = ".datasplit"
+
 
 def get_surprise(expectnet,i_feature=None,i_context=None,input_pairs=None):
 	if input_pairs is not None:
@@ -104,26 +110,29 @@ def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True)
 				y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 				yield X,y
 
-def load_w2v_and_surp(path,w2vsuffix=".w2vmodel",corrsuffix=".corrcounts"):
-	w2v_model = gensim.models.Word2Vec.load(path+w2vsuffix)
-	with open(path+corrsuffix) as f:
+def load_w2v_and_surp(path):
+	w2v_model = gensim.models.Word2Vec.load(path+W2V_SUFFIX)
+	with open(path+CORRS_SUFFIX) as f:
 		corrcounts,word_index,n_docs,total_words = pickle.load(f)
 	return w2v_model,corrcounts,word_index,n_docs,total_words
 
-def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None,suffix=".datasplit"):
+def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None):
 	train_indices = sorted(random.sample(xrange(len(word_index)),int(train_fraction*len(word_index))))
 	test_and_val_indices = [i for i in xrange(len(word_index)) if i not in train_indices]
 	val_indices = sorted(random.sample(test_and_val_indices,int(val_fraction*len(word_index))))
 	test_indices = sorted([i for i in test_and_val_indices if i not in val_indices])
 	if path is not None:
-		with open(path+suffix,"wb") as f:
+		with open(path+DATASPLIT_SUFFIX,"wb") as f:
 			pickle.dump((train_fraction,val_fraction,test_fraction,train_indices,val_indices,test_indices),f)
 	return train_indices,val_indices,test_indices
 
 def load_dataset_split(path):
-	with open(path+"expectnet.split") as f:
+	with open(path+DATASPLIT_SUFFIX) as f:
 		train_fraction,val_fraction,test_fraction,train_indices,val_indices,test_indices = pickle.load(f)
 	return train_fraction,val_fraction,test_fraction,train_indices,val_indices,test_indices
+
+def load_expectnet(path):
+	return load_model(path+EXPECTNET_SUFFIX)
 
 def script_compile_expectnet(layer_sizes,w2v_model_vector_size):
 	net_layers = zip([w2v_model_vector_size] + layer_sizes,layer_sizes + [1])
@@ -218,6 +227,6 @@ if __name__ == "__main__":
 									 indices_to_exclude=train_indices+val_indices
 	)
 	score = expectnet.evaluate(X_test, y_test, batch_size=batch_size)
-	expectnet.save(os.path.join(path,inputfile)+".expectnet")
+	expectnet.save(os.path.join(path,inputfile)+EXPECTNET_SUFFIX)
 	print
 	print score
