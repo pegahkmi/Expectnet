@@ -30,6 +30,13 @@ def get_wordnet_pos(treebank_tag):
     else:
         return wordnet.NOUN
 
+singulariser_corrections = {"autonomou":"autonomous","cmo":"cmos"}
+def correct_singulariser(w):
+	try:
+		return singulariser_corrections[w]
+	except KeyError:
+		return w
+
 class ACMDL_DocReader(object):
 	def __init__(self,path):
 		self.filepath = path
@@ -47,7 +54,7 @@ class ACMDL_DocReader(object):
 				#docwords = [w for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
 
 				#Singularise
-				docwords = [singularize(w) for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
+				docwords = [correct_singulariser(singularize(w)) for w in self.tokeniser.tokenize(row["Abstract"].lower()) if w not in self.stop]
 
 				#tag+lemmatize
 				#docwords = nltk.pos_tag(self.tokeniser.tokenize(row["Abstract"].lower()))
@@ -119,7 +126,8 @@ class ACMDL_DocReader(object):
 		del self.correlations_list
 		logger.info(" ** Completed pruning values. Final corrs shape:"+str(self.corrs_final.shape))
 
-		#self.corrs_dicts = Parallel(n_jobs=num_cores)(delayed(reindex)(self.correlations[w],self.word_index) for w in self.word_index)
+		#self.corrs_dicts =\
+
 		#counts = [float(self.correlations[w][w]) for w in self.word_index]
 		logger.info(" ** Completed corrdict calculation.")
 
