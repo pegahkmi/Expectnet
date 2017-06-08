@@ -16,7 +16,7 @@ from scipy.stats import fisher_exact
 
 EXPECTNET_SUFFIX = ".expectnet"
 W2V_SUFFIX = ".w2vmodel"
-CORRS_SUFFIX = ".corrcounts"
+CORRS_SUFFIX = ".preprocessed"
 DATASPLIT_SUFFIX = ".datasplit"
 
 
@@ -110,11 +110,11 @@ def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True)
 				y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
 				yield X,y
 
+#pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.w2v_model),pro_f)
 def load_w2v_and_surp(path):
-	w2v_model = gensim.models.Word2Vec.load(path+W2V_SUFFIX)
 	with open(path+CORRS_SUFFIX) as f:
-		corrcounts,word_index,n_docs,total_words = pickle.load(f)
-	return w2v_model,corrcounts,word_index,n_docs,total_words
+		 documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws,w2v_model = pickle.load(f)
+	return documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws,   w2v_model
 
 def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None):
 	train_indices = sorted(random.sample(xrange(len(word_index)),int(train_fraction*len(word_index))))
@@ -196,12 +196,12 @@ if __name__ == "__main__":
 	batch_size = sample_size / 10 / multiprocessing.cpu_count() if parallelise else sample_size / 10
 
 
-	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(os.path.join(path,inputfile))
-	logger.info(" ** w2v loaded. Corrcounts type:"+str(type(corrcounts)))
+	documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws, w2v_model = load_w2v_and_surp(os.path.join(path,inputfile))
+	#logger.info(" ** w2v loaded. Corrcounts type:"+str(type(corrcounts)))
 	expectnet = script_compile_expectnet(layer_sizes,2*w2v_model.vector_size)
 	logger.info(" ** Expectnet compiled.")
 
-	train_indices,val_indices,test_indices = split_dataset(word_index,path=os.path.join(path,inputfile))
+	train_indices,val_indices,test_indices = split_dataset(doc_ids,path=os.path.join(path,inputfile))
 	logger.info(" ** Dataset split into train, test and validation.")
 
 	if generate:
