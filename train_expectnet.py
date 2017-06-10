@@ -84,7 +84,9 @@ def threadsafe_generator(f):
 
 @threadsafe_generator
 def yield_training_set(path,batch_size,indices_to_exclude = []):
-	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(path)
+	_,_, cooccurrence, _, n_docs, _, _, _,w2v_model = load_w2v_and_surp(path)
+	word_index = cooccurrence.keys()
+	total_words = len(word_index)
 	valid_indices = [i for i in range(len(word_index)) if i not in indices_to_exclude]
 	while 1:
 		batch_indices = np.stack((np.random.choice(len(valid_indices),batch_size),
@@ -92,12 +94,14 @@ def yield_training_set(path,batch_size,indices_to_exclude = []):
 								 	axis=1).tolist()
 		batch_indices = [(valid_indices[i],valid_indices[j]) if i<j else (valid_indices[i],valid_indices[j+1]) for i,j in batch_indices]
 		X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
-		y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
+		y = np.stack([get_surprise_from_data(i,j,cooccurrence,n_docs) for i,j in batch_indices])
 		yield X,y
 
 
 def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True):
-	w2v_model,corrcounts,word_index,n_docs,total_words = load_w2v_and_surp(path)
+	_,_, cooccurrence, _, n_docs, _, _, _,w2v_model = load_w2v_and_surp(path)
+	word_index = cooccurrence.keys()
+	total_words = len(word_index)
 	valid_indices = [i for i in range(len(word_index)) if i not in indices_to_exclude]
 	while 1:
 		idx = valid_indices
@@ -107,14 +111,14 @@ def iterate_training_set(path,batch_size,indices_to_exclude = [],randomise=True)
 			for batch_i2 in [idx[j:j+batch_size] for j in xrange(0,len(idx),batch_size)]:
 				batch_indices = zip(batch_i1,batch_i2)
 				X = np.stack([expectnet_input_vector(i,j,w2v_model,word_index) for i,j in batch_indices])
-				y = np.stack([get_surprise_from_data(i,j,corrcounts,n_docs) for i,j in batch_indices])
+				y = np.stack([get_surprise_from_data(i,j,cooccurrence,n_docs) for i,j in batch_indices])
 				yield X,y
 
 #pickle.dump((self.documents,self.word_occurrence, self.cooccurrence,self.dictionary, self.total_docs, self.doc_ids, self.doc_titles, self.doc_raws, self.w2v_model),pro_f)
 def load_w2v_and_surp(path):
 	with open(path+CORRS_SUFFIX) as f:
 		 documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws,w2v_model = pickle.load(f)
-	return documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws,   w2v_model
+	return documents, word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws, w2v_model
 
 def split_dataset(word_index,train_fraction=0.7,val_fraction=0.2,test_fraction=0.1,path=None):
 	train_indices = sorted(random.sample(xrange(len(word_index)),int(train_fraction*len(word_index))))
@@ -195,14 +199,14 @@ if __name__ == "__main__":
 	parallelise = True
 	batch_size = sample_size / 10 / multiprocessing.cpu_count() if parallelise else sample_size / 10
 
-
 	documents,word_occurrence, cooccurrence, dictionary, total_docs, doc_ids, doc_titles, doc_raws, w2v_model = load_w2v_and_surp(os.path.join(path,inputfile))
-	#logger.info(" ** w2v loaded. Corrcounts type:"+str(type(corrcounts)))
+	logger.info(" ** w2v loaded. Corrcounts type:"+str(type(cooccurrence)))
 	expectnet = script_compile_expectnet(layer_sizes,2*w2v_model.vector_size)
 	logger.info(" ** Expectnet compiled.")
-
-	train_indices,val_indices,test_indices = split_dataset(doc_ids,path=os.path.join(path,inputfile))
+	word_index = cooccurrence.keys()
+	train_indices,val_indices,test_indices = split_dataset(word_index,path=os.path.join(path,inputfile))
 	logger.info(" ** Dataset split into train, test and validation.")
+     
 
 	if generate:
 		expectnet = script_train_expectnet(expectnet,
